@@ -1,0 +1,168 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "DGiannis"
+date: "October 19, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Project Background-Scope and Objective
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of this analysis is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+
+# Data Source
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+# Outline of the approach
+
+#####Based on the scope, this is a classification problem so we are going to implement three indicative methods and will indentify which one is the most proper for the specific data. Finally, we will apply the best method on the testing dataset to make predictions. More speciffically,the outline process will be as follows:
+
+
+#####-Loading the Data
+#####-Data preprocessing
+#####-Create partision in the training set - cross validation
+#####-Applying Classification Tree
+#####-Applying Random Forest
+#####-Applying Generalized Boosted
+#####-Model Comparison
+#####-Applying the best model on training data set
+
+
+
+# Loading the Data
+  
+###loading the training data set
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+url_training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(url_training, destfile = "pml-training.csv")
+training = read.csv("pml-training.csv")
+```
+
+### loading the testing data set
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+url_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url_test, destfile = "pml-testing.csv")
+testing = read.csv("pml-testing.csv")
+```
+
+# Data preprocessing
+
+#####Removing NAs, near to zero variables and then also drop irrelevant columns (non-numeric) like user_name etc.
+
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+library(caret)
+
+## remove NAs
+
+training = read.csv("pml-training.csv", na.strings = c("","NA","#DIV/0!"))
+testing = read.csv("pml-testing.csv",na.strings = c("","NA","#DIV/0!"))
+
+training<-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+
+## remove near to zero variables
+
+non_zero_var <- nearZeroVar(training)
+training_data <- training[,-non_zero_var]
+testing_data <- testing[,-non_zero_var]
+
+## remove irrelevant variables
+training_data <- training_data[,8:59]
+testing_data <- testing_data[,8:59]
+
+dim(training_data);dim(testing_data)
+```
+
+# Create partision in the training set - cross validation
+
+#####We will split now the initial training set in 2 parts, the train set from where the methods will learn and the test set for cross validation in order to identidy which of the three methods perform better in this specific project by measuring the out of sample error each time
+
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+set.seed(999)
+
+inTrain <- createDataPartition(training_data$classe, p=0.8, list=FALSE)
+train <- training_data[inTrain,]
+test <- training_data[-inTrain,]
+
+dim(train);dim(test)
+```
+
+# Applying Classification Tree
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+CT_fit <- train(classe ~ ., data = train, method="rpart")
+
+CT_prediction <- predict(CT_fit, test)
+confusionMatrix(CT_prediction, test$classe)
+
+
+library("rpart.plot")
+rpart.plot(CT_fit$finalModel)
+
+```
+
+
+
+
+#####It is evident that Classification Tree model does not perform well as the accuraccy is very low (~ 48%). In other words the error in the test set (out of sample error) is high (~52%)
+
+
+# Applying Random Forest
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+set.seed(999)
+RF_fit <- train(classe ~ ., data = train, method = "rf", ntree = 100)
+
+RF_prediction <- predict(RF_fit, test)
+confusionMatrix(RF_prediction, test$classe)
+```
+
+#####High accuracy as the out of sample error in the train set is very low (< 1%)
+
+
+# Applying Generalized Boosted
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+library("gbm")
+set.seed(999)
+
+GBM_fit <- train(classe ~ ., data = train, method = "gbm", verbose = FALSE)
+GBM_fit$finalModel
+GBM_prediction <- predict(GBM_fit, test)
+
+confusionMatrix(GBM_prediction, test$classe)
+```
+
+#####High accuracy as the out of sample error in the train set is very low (~ 4%)
+
+
+# Model Comparison
+
+#####Now having the output results from all the three models, we can evaluate how each of these models has predicted the test dataset by looking at the out of sample error. Obviously, Decision Tree model has a very poor performance after checking its out of sample error and definetelly it's not a proper model for this project. On the other hand, Random Forest and Generalized Boosted method performed very well and below we will evaluate which of those two is the best candidate.
+
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+confusionMatrix(RF_prediction, test$classe)$overall
+confusionMatrix(GBM_prediction, test$classe)$overall
+```
+
+# Applying the best model on training data set
+
+#####After checking the Overall Statistics data, the Random Forest model has more accuracy than Generalized Boosted model. Hence, we will be selecting Random Forest model for the final prediction in the testing dataset.
+
+
+```{r,eval=TRUE,message=FALSE,warning=FALSE}
+Final_RF_prediction <- predict(RF_fit, testing_data )
+Final_RF_prediction
+```
